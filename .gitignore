@@ -1,0 +1,7 @@
+.idea
+.devcontainer
+.venv
+__pycache__
+.morgue
+# Ignore secrets file
+.streamlit/secrets.toml

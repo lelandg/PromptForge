@@ -4,10 +4,12 @@ import json
 import os
 import pathlib
 import traceback
+import pyperclip
 
 import streamlit as st
 
 from version import __version__
+
 
 _debug = False
 
@@ -86,7 +88,7 @@ def show_colors(key=""):
 try:
     # Must be the first Streamlit command!
     st.set_page_config(
-        page_title=f"Prompt Forge {__version__} (Editable)",
+        page_title=f"Prompt Forge {__version__}",
         layout="wide"
     )
 
@@ -179,14 +181,15 @@ try:
         st.markdown(button_style, unsafe_allow_html=True)
 
         if st.button(button_label, key=key):
-            st.markdown(f"""
-            <script>
-            navigator.clipboard.writeText({text!r});
-            </script>
-            """, unsafe_allow_html=True)
-            st.success("Copied to clipboard!")
+            try:
+                pyperclip.copy(text)
+                st.success("Copied to clipboard!")
+            except Exception as e:
+                st.error("Failed to copy to clipboard.")
             return True
+
         return False
+
 
     # columns for banner + content
     col_left, col_center = st.columns([2, 7])
@@ -199,7 +202,7 @@ try:
             .fixed-banner {{ position:fixed; top:0; left:0; width:25%; padding:5px;
                             margin:0; border-radius:5px;
                             background:transparent; z-index:9999; text-align:center; }}
-            .block-container {{ padding-top:10px; }}
+            .block-container {{ padding-top:120px; }}
           </style>
           <div class="fixed-banner">
             <img src="data:image/png;base64,{img_b64}"
@@ -211,16 +214,6 @@ try:
 
     with col_center:
         col_left, col_center, col_right = st.columns([1, 2, 1])  # Adjust column widths for centering
-
-        with col_center:
-            st.markdown(
-                f"""
-                <div style="text-align: center; font-size: 24px; font-weight: bold;">
-                    Prompt Forge v{__version__}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
 
         def load_json(name):
             try:
@@ -234,6 +227,30 @@ try:
         moods     = load_json("moods")
         lighting  = load_json("lighting")
         colors    = load_json("colors")
+
+        # Persistent header shown at the top, always visible
+        st.markdown(
+            f"""
+            <div style="text-align:center; font-size: 28px; font-weight: bold; color: #1f2937; margin-top: 50px;">
+                Prompt Forge v{__version__}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown(
+            """
+            <style>
+                .block-container {
+                    padding-top: 0px;
+                    padding-bottom: 0px;
+                    padding-left: 0px;
+                    padding-right: 0px;
+                }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
 
         # Update tabs to include the "Documentation" tab
         tab1, tab2, tab3, tab4 = st.tabs(["🎯 Single Prompt", "🌀 Batch Mode", "🛠️ Edit Lists", "📖 Documentation"])
@@ -687,7 +704,7 @@ try:
         <style>
             /* Hide streamlit's default footer */
             footer {visibility: hidden;}
-    
+
             /* Custom footer */
             .custom-footer {
                 position: fixed;
@@ -700,7 +717,7 @@ try:
                 background: rgba(220, 220, 220, 0.85);
             }
         </style>
-    
+
         <div class="custom-footer">
             🚀 View the project
             <a href="https://github.com/lelandg/promptforge" target="_blank">

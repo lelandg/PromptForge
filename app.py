@@ -4,9 +4,10 @@ import json
 import os
 import pathlib
 import traceback
-import pyperclip
 
 import streamlit as st
+import streamlit.components.v1 as components
+
 
 from version import __version__
 
@@ -157,38 +158,83 @@ try:
         ]
 
     def copy_button(text: str, label: str = "Copy", key=None):
-        """Create a button styled like Streamlit's download_button but copy text to clipboard."""
-        clipboard_icon = "📋"
-        button_label = f"{clipboard_icon} {label}"
-        button_style = """
-            <style>
-            .stButton>button {
+        """
+        Create a button that copies text to the clipboard using JavaScript.
+
+        Additionally, triggers an st.success message on successful click.
+        """
+        button_id = f"copy-button-{key}" if key else "copy-button"
+        session_key = f"copy-success-{key}"  # Unique key to manage copy state
+
+        # Check if the success message should be displayed
+        if f"{session_key}" not in st.session_state:
+            st.session_state[session_key] = False
+
+        # If the state for success is True, display an st.success message
+        if st.session_state[session_key]:
+            st.success("Prompt copied to clipboard!")
+            # Reset state after displaying the message
+            st.session_state[session_key] = False
+
+        # Custom HTML + JavaScript for the button
+        custom_html = f"""
+        <div>
+            <button id="{button_id}" style="
                 border-radius: 4px;
                 background-color: #f0f2f6;
                 color: #262730;
                 padding: 0.35em 1em;
                 font-size: 0.875rem;
                 border: 1px solid #e6e9ef;
-                display: flex;
-                align-items: center;
-                gap: 0.4em;
-            }
-            .stButton>button:hover {
-                background-color: #e6e9ef;
-            }
-            </style>
+                cursor: pointer;
+            ">
+                📋 {label}
+            </button>
+            <script>
+                const button = document.getElementById("{button_id}");
+                button.addEventListener("click", () => {{
+                    navigator.clipboard.writeText({text!r}).then(() => {{
+                        // Inform Streamlit backend that copy was successful
+                        window.parent.postMessage({{'isCopied': true, 'key': '{session_key}' }}, "*");
+                    }}).catch(err => {{
+                        alert("Failed to copy: " + err);
+                    }});
+                }});
+            </script>
+        </div>
+    """
+
+        # Handle postMessage callback from JavaScript to Streamlit
+        components.html(
+            f"""
+        <script>
+            window.addEventListener("message", (event) => {{
+                if (event.data.isCopied && event.data.key === '{session_key}') {{
+                    fetch('/_stcore/{session_key}');
+                }}
+            }});
+        </script>
+        """ + custom_html,
+            height=50,
+        )
+
+
+    # Add this in an app initialization section to persist request handling
+    @st.cache_data
+    def handle_js_backend():
         """
-        st.markdown(button_style, unsafe_allow_html=True)
+        Simulate communication between JavaScript and Streamlit backend
+        to trigger `st.success` message for copy.
+        """
+        session_keys = [key for key in st.session_state if "copy-success-" in key]
+        for session_key in session_keys:
+            def reset_copy_state(key=session_key):
+                """Reset state after a short delay"""
+                st.session_state[key] = True
+            st.session_state[session_key] = False
 
-        if st.button(button_label, key=key):
-            try:
-                pyperclip.copy(text)
-                st.success("Copied to clipboard!")
-            except Exception as e:
-                st.error("Failed to copy to clipboard.")
-            return True
-
-        return False
+    # Call to handle JavaScript backend communication
+    handle_js_backend()
 
 
     # columns for banner + content

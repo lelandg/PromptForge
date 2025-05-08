@@ -47,7 +47,7 @@ with col_center:
         st.markdown("At the request of the original \"Midjourney Prompter\" creator, this site has been renamed and moved to to:", unsafe_allow_html=True,)
 
         # Simple text box with a link
-        link_text = "https://promptforgeapp.streamlit.io/"
+        link_text = "https://promptforgeapp.streamlit.app/"
 
         # Display the link as clickable
         st.markdown(f"[Click here to use Prompt Forge]({link_text})", unsafe_allow_html=True)

@@ -5,7 +5,7 @@ Welcome to **Prompt Forge**, an interactive application designed to help you cra
 ## Live Streamlit Example
 
 You can try the live version of the app here:  
-[https://promptforgeapp.streamlit.app/](https://promptforge.streamlit.app/)
+[https://promptforgeapp.streamlit.app/](https://promptforgeapp.streamlit.app/)
 
 If you're tech-savvy and want to run the app locally, follow the installation instructions below. 
 Or you can use the live version to explore the features without any setup. 

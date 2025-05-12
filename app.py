@@ -1,4 +1,5 @@
 # --- Rest of your app code ---
+import datetime
 import itertools
 import json
 import os
@@ -8,9 +9,10 @@ import traceback
 import streamlit as st
 import streamlit.components.v1 as components
 
-
 from version import __version__
 
+query_params = st.query_params
+show_admin_tab = 'admin' in query_params.keys()
 
 _debug = False
 
@@ -18,7 +20,7 @@ _debug = False
 
 # Fix the checkbox issue by adding a unique key
 def show_colors(key=""):
-    global c1, c2, c1inner, c2inner, selected_scheme, custom_input, color, col_left, col_center, col_right
+    global c1, c2, c1inner, c2inner, selected_scheme, custom_input, color #, col_left, col_center, col_right
     # Color scheme (existing code)...
     c1, c2, c3 = st.columns([1, 1, 10])
     container = st.container()
@@ -56,26 +58,26 @@ def show_colors(key=""):
     preview_widgets = _build_color_previews(preview_colors)
     # Show color preview if selected
     if show_preview and preview_colors:
-        col_left, col_center, col_right = st.columns([1, 1, 10])
-        with col_left:
+        col_left_color, col_center_color, col_right_color = st.columns([1, 1, 10])
+        with col_left_color:
             st.markdown(" ")
         if selected_scheme == "Complementary":
-            with col_center:
+            with col_center_color:
                 st.markdown("*Preview*")
             for i in range(0, len(preview_colors), 2):
                 pair = preview_colors[i: i + 2]
-                col_left, col_center, col_right = st.columns(3)
+                col_left_color, col_center_color, col_right_color = st.columns(3)
                 preview_widgets = _build_color_previews(pair)
                 if len(preview_widgets) == 2:
-                    col_center.markdown(preview_widgets[0], unsafe_allow_html=True)
-                    col_right.markdown(preview_widgets[1], unsafe_allow_html=True)
+                    col_center_color.markdown(preview_widgets[0], unsafe_allow_html=True)
+                    col_right_color.markdown(preview_widgets[1], unsafe_allow_html=True)
                 else:
-                    col_center.markdown(preview_widgets[0], unsafe_allow_html=True)
+                    col_center_color.markdown(preview_widgets[0], unsafe_allow_html=True)
         else:
-            with col_center:
+            with col_center_color:
                 st.write("*Preview*")
             preview_colors = _build_color_previews(preview_colors)
-            col_right.markdown(
+            col_right_color.markdown(
                 """
                 <div style='display:flex; flex-wrap:wrap; gap:4px;'>
                 """
@@ -237,29 +239,187 @@ try:
     handle_js_backend()
 
 
-    # columns for banner + content
-    col_left, col_center = st.columns([2, 7])
-
-    with col_left:
-        banner_path = pathlib.Path("assets/robo-generate.png")
+    # Function to draw the banner
+    def draw_banner():
+        # Display the current banner
+        banner_path = pathlib.Path(current_banner["path"])
         img_b64 = base64.b64encode(banner_path.read_bytes()).decode()
+
+        # Prepare banner data for JavaScript
+        banner_data = []
+        current_index = banners.index(current_banner)
+
+        for i, banner in enumerate(banners):
+            banner_path = pathlib.Path(banner["path"])
+            try:
+                banner_img_b64 = base64.b64encode(banner_path.read_bytes()).decode()
+                banner_data.append({
+                    "index": i,
+                    "image": banner_img_b64,
+                    "description": banner.get("description", f"Banner {i + 1}"),
+                    "is_current": banner.get("is_current", False)
+                })
+            except Exception as e:
+                if _debug:
+                    st.error(f"Error loading banner {banner['path']}: {str(e)}")
+
+        # Convert banner data to JSON for JavaScript
+        banner_data_json = json.dumps(banner_data)
+
         st.markdown(f"""
           <style>
             .fixed-banner {{ position:fixed; top:0; left:0; width:25%; padding:5px;
                             margin:0; border-radius:5px;
                             background:transparent; z-index:9999; text-align:center; }}
-            .block-container {{ padding-top:120px; }}
+            .block-container {{ padding-top:50px; }}
+            .banner-img {{ cursor: pointer; width:60%; height:auto; margin:0 auto; }}
+
+            /* Banner navigation buttons */
+            .banner-nav-btn {{ 
+                position: absolute; 
+                top: 50%; 
+                transform: translateY(-50%);
+                background-color: rgba(255,255,255,0.7);
+                color: #333;
+                border: none;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                font-size: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                z-index: 10000;
+                transition: background-color 0.3s;
+            }}
+            .banner-nav-btn:hover {{
+                background-color: rgba(255,255,255,0.9);
+            }}
+            .banner-prev-btn {{
+                left: 5px;
+            }}
+            .banner-next-btn {{
+                right: 5px;
+            }}
+
+            /* Modal styles */
+            .banner-modal {{ display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; 
+                           height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8); }}
+            .modal-content {{ position: relative; margin: auto; padding: 0; width: 80%; max-width: 800px; 
+                            top: 50%; transform: translateY(-50%); }}
+            .close {{ color: white; position: absolute; top: 10px; right: 25px; font-size: 35px; font-weight: bold; 
+                    cursor: pointer; z-index: 10001; }}
+            .banner-img-large {{ width: 100%; height: auto; }}
+            .prev, .next {{ cursor: pointer; position: absolute; top: 50%; width: auto; padding: 16px; 
+                          margin-top: -50px; color: white; font-weight: bold; font-size: 30px; 
+                          transition: 0.6s ease; border-radius: 0 3px 3px 0; user-select: none;
+                          z-index: 10002; }}
+            .next {{ right: 0; border-radius: 3px 0 0 3px; }}
+            .prev:hover, .next:hover {{ background-color: rgba(0,0,0,0.8); }}
+            .banner-caption {{ color: white; padding: 10px; text-align: center; }}
           </style>
           <div class="fixed-banner">
             <img src="data:image/png;base64,{img_b64}"
                     alt="Prompt Forge Banner"
-                    title="Created with ChatGPT (ironically!) 😁"
-                 style="width:60%; height:auto; margin:0 auto;">
+                    title="{current_banner.get('description', 'Prompt Forge Banner')} (Click to browse banners)"
+                    class="banner-img" id="banner-img">
+            <button class="banner-nav-btn banner-prev-btn" id="banner-prev-btn" onclick="navigateBanner('prev')" style="display: {'' if current_index > 0 else 'none'}">◀</button>
+            <button class="banner-nav-btn banner-next-btn" id="banner-next-btn" onclick="navigateBanner('next')" style="display: {'' if current_index < len(banners) - 1 else 'none'}">▶</button>
+          </div>
+
+          <!-- Banner Modal -->
+          <div id="bannerModal" class="banner-modal">
+            <span class="close">&times;</span>
+            <div class="modal-content">
+              <div style="position: relative; width: 100%;">
+                <a class="prev">&#10094;</a>
+                <img class="banner-img-large" id="modalBannerImg">
+                <a class="next">&#10095;</a>
+              </div>
+              <div class="banner-caption" id="bannerCaption"></div>
+            </div>
           </div>
         """, unsafe_allow_html=True)
 
+        return banner_data_json, current_index
+
+
+    # columns for banner + content
+    col_left, col_center = st.columns([2, 7])
+
+
+    # Load banner images from JSON file
+    def load_banners():
+        try:
+            return json.load(open(os.path.join("data", "banners.json")))
+        except FileNotFoundError:
+            # Default banner if file doesn't exist
+            return [{"filename": "robo-generate.png", "path": "assets/robo-generate.png",
+                     "description": "Default banner", "added_date": "", "is_current": True}]
+
+
+    banners = load_banners()
+    current_banner = next((b for b in banners if b.get("is_current", False)), banners[0])
+
+    with col_left:
+        banner_control = st.container()
+        # Use columns for navigation buttons
+        prev_col, info_col, next_col = banner_control.columns([1, 10, 1])
+        prev_col.markdown(f"<div style='padding-top: {200}px'></div>", unsafe_allow_html=True)
+        next_col.markdown(f"<div style='padding-top: {200}px'></div>", unsafe_allow_html=True)
+
+        # Add banner navigation
+        if len(banners) > 1:
+
+            # Banner info
+            with info_col:
+                st.markdown(f"<div style='padding-top: {10}px'></div>", unsafe_allow_html=True)
+                st.markdown("<h6 style='text-align:center>Featured Image History</h6>", unsafe_allow_html=True)
+            # Get current banner index
+            current_index = banners.index(current_banner)
+
+            # Previous button
+            if prev_col.button("◀", key="prev_banner", disabled=current_index == 0, use_container_width=True):
+                # Update current banner in JSON 
+                for b in banners:
+                    b["is_current"] = False
+                banners[current_index - 1]["is_current"] = True
+
+                # Save updated JSON
+                with open(os.path.join("data", "banners.json"), "w") as f:
+                    json.dump(banners, f, indent=4)
+
+                # Rerun to show the new banner
+                st.rerun()
+
+            # Show current banner image between buttons
+
+
+            with info_col:
+                caption = f"{current_banner.get('description', 'Banner')}"
+                st.image(current_banner["path"], use_container_width=True)
+                st.caption(
+                    f"<p style='text-align: center;'>{caption}<br>{current_banner.get('added_date', '')}&nbsp;&nbsp;&nbsp;&nbsp;({current_index + 1}/{len(banners)})</p>",
+                    unsafe_allow_html=True)
+
+            # Next button
+            if next_col.button("▶", key="next_banner", disabled=current_index == len(banners) - 1, use_container_width=True):
+                # Update current banner in JSON
+                for b in banners:
+                    b["is_current"] = False
+                banners[current_index + 1]["is_current"] = True
+
+                # Save updated JSON
+                with open(os.path.join("data", "banners.json"), "w") as f:
+                    json.dump(banners, f, indent=4)
+
+                # Rerun to show the new banner
+                st.rerun()
+
+
     with col_center:
-        col_left, col_center, col_right = st.columns([1, 2, 1])  # Adjust column widths for centering
+        center_col_left, center_col_center, center_col_right = st.columns([1, 2, 1])  # Adjust column widths for centering
 
         def load_json(name):
             try:
@@ -298,8 +458,11 @@ try:
             unsafe_allow_html=True,
         )
 
-        # Update tabs to include the "Documentation" tab
-        tab1, tab2, tab3, tab4 = st.tabs(["🎯 Single Prompt", "🌀 Batch Mode", "🛠️ Edit Lists", "📖 Documentation"])
+        # Update tabs to include the "Documentation" tab and "Admin" tab
+        if show_admin_tab:
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(["🎯 Single Prompt", "🌀 Batch Mode", "🛠️ Edit Lists", "📖 Documentation", "🔒 Admin"])
+        else:
+            tab1, tab2, tab3, tab4 = st.tabs(["🎯 Single Prompt", "🌀 Batch Mode", "🛠️ Edit Lists", "📖 Documentation"])
 
         #
         # === Tab 1: Single Prompt ===
@@ -460,7 +623,7 @@ try:
                 help="This is the final generated prompt. Copy it for use with MidJourney."
             )
 
-            col_left, col1, col2, col_right = st.columns([1, 3, 3, 1])
+            _, col1, col2, col_right = st.columns([1, 3, 3, 1])
             with col1:
                 copy_button(
                     text=final,
@@ -692,7 +855,7 @@ try:
                 # Text area for generated prompts
                 st.text_area("Generated Prompts", batch_prompts_text, height=300)
 
-                col_left, col1, col2, col_right = st.columns([1, 3, 3, 1])
+                _, col1, col2, col_right = st.columns([1, 3, 3, 1])
                 with col1:
                     # Copy Button
                     copy_button(
@@ -742,6 +905,220 @@ try:
                 st.error("Error loading documentation:")
                 st.code(traceback.format_exc())
 
+        # === Tab 5: Admin ===
+        if show_admin_tab:
+            with tab5:
+                st.header("Banner Management")
+                st.markdown("This section allows the administrator to manage banner images.")
+
+                # Initialize session state for admin authentication
+                if "admin_authenticated" not in st.session_state:
+                    st.session_state.admin_authenticated = False
+
+                # Authentication form
+                if not st.session_state.admin_authenticated:
+                    with st.form("admin_auth_form"):
+                        password = st.text_input("Admin Password", type="password")
+                        submit_button = st.form_submit_button("Login")
+
+                        if submit_button:
+                            # Check password against the one in secrets.toml
+                            if password == st.secrets.get("ADMIN_PASSWORD", ""):
+                                st.session_state.admin_authenticated = True
+                                st.rerun()
+                            else:
+                                st.error("Incorrect password. Please try again.")
+
+                # Admin functionality (only shown when authenticated)
+                if st.session_state.admin_authenticated:
+                    # Load current banners
+                    def load_banners():
+                        try:
+                            return json.load(open(os.path.join("data", "banners.json")))
+                        except FileNotFoundError:
+                            return [{"filename": "robo-generate.png", "path": "assets/robo-generate.png",
+                                    "description": "Default banner", "added_date": "", "is_current": True}]
+
+                    banners = load_banners()
+
+                    # Add new banner section
+                    st.subheader("Add New Banner")
+
+                    with st.form("add_banner_form"):
+                        # Upload image
+                        uploaded_file = st.file_uploader("Upload Banner Image", type=["png", "jpg", "jpeg"])
+
+                        # Description
+                        description = st.text_input("Banner Description",
+                                                   help="Enter a short description for this banner")
+
+                        # Set as current
+                        set_as_current = st.checkbox("Set as Current Banner",
+                                                   help="Check to make this the currently displayed banner")
+
+                        # Submit button
+                        submit_button = st.form_submit_button("Add Banner")
+
+                        if submit_button and uploaded_file is not None:
+                            try:
+                                # Process the uploaded image
+                                img = Image.open(uploaded_file)
+
+                                # Generate a filename based on the description
+                                filename = f"banner_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                                filepath = os.path.join("assets", filename)
+
+                                # Save the image to the assets directory
+                                img.save(filepath)
+
+                                # Update the banners.json file
+                                new_banner = {
+                                    "filename": filename,
+                                    "path": f"assets/{filename}",
+                                    "description": description if description else "New banner",
+                                    "added_date": datetime.datetime.now().strftime("%Y-%m-%d"),
+                                    "is_current": set_as_current
+                                }
+
+                                # If this banner is set as current, update other banners
+                                if set_as_current:
+                                    for banner in banners:
+                                        banner["is_current"] = False
+
+                                # Add the new banner to the list
+                                banners.append(new_banner)
+
+                                # Save the updated banners list
+                                with open(os.path.join("data", "banners.json"), "w") as f:
+                                    json.dump(banners, f, indent=4)
+
+                                st.success(f"Banner '{description}' added successfully!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error adding banner: {str(e)}")
+                                st.code(traceback.format_exc())
+
+                    # Manage existing banners
+                    st.subheader("Manage Existing Banners")
+
+                    # Create a session state for selected banner if it doesn't exist
+                    if "selected_banner_idx" not in st.session_state:
+                        st.session_state.selected_banner_idx = 0
+
+                    # Display all banners in a clickable grid with thumbnails
+                    st.write("Click on a banner to select it for editing:")
+
+                    # Create columns for the grid
+                    cols_per_row = 3
+
+                    # Process banners in groups of cols_per_row
+                    for i in range(0, len(banners), cols_per_row):
+                        cols = st.columns(cols_per_row)
+
+                        # Add banners to this row
+                        for j in range(cols_per_row):
+                            idx = i + j
+                            if idx < len(banners):
+                                banner = banners[idx]
+                                with cols[j]:
+                                    # Make the entire column clickable by wrapping it in a container
+                                    container = st.container()
+
+                                    # Display thumbnail
+                                    container.image(
+                                        banner["path"],
+                                        width=100,
+                                        caption=f"{idx + 1}. {banner.get('description', '')}"
+                                    )
+
+                                    # Show current indicator
+                                    if banner.get("is_current", False):
+                                        container.write("✓ Current")
+
+                                    # Make the entire container clickable
+                                    if container.button("Click to Edit", key=f"select_banner_{idx}"):
+                                        st.session_state.selected_banner_idx = idx
+                                        st.rerun()
+
+                    # Get the selected banner
+                    selected_banner_idx = st.session_state.selected_banner_idx
+                    selected_banner = banners[selected_banner_idx]
+
+                    st.write("---")
+                    st.subheader(f"Editing Banner: {selected_banner.get('description', '')}")
+
+                    # Display the selected banner
+                    st.image(
+                        selected_banner["path"],
+                        caption=selected_banner.get("description", ""),
+                        width=300
+                    )
+
+                    # Edit banner description
+                    new_description = st.text_input(
+                        "Edit Description/Prompt",
+                        value=selected_banner.get("description", ""),
+                        key="edit_banner_description"
+                    )
+
+                    if st.button("Update Description"):
+                        # Update the banner description
+                        banners[selected_banner_idx]["description"] = new_description
+
+                        # Save the updated banners list
+                        with open(os.path.join("data", "banners.json"), "w") as f:
+                            json.dump(banners, f, indent=4)
+
+                        st.success(f"Banner description updated to '{new_description}'!")
+                        st.rerun()
+
+                    # Actions for the selected banner
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        # Set as current banner
+                        if not selected_banner.get("is_current", False):
+                            if st.button("Set as Current Banner"):
+                                # Update all banners to not be current
+                                for banner in banners:
+                                    banner["is_current"] = False
+
+                                # Set the selected banner as current
+                                banners[selected_banner_idx]["is_current"] = True
+
+                                # Save the updated banners list
+                                with open(os.path.join("data", "banners.json"), "w") as f:
+                                    json.dump(banners, f, indent=4)
+
+                                st.success(f"Banner '{selected_banner.get('description', '')}' set as current!")
+                                st.rerun()
+
+                    with col2:
+                        # Delete banner
+                        if len(banners) > 1:  # Prevent deleting the last banner
+                            if st.button("Delete Banner", key="delete_banner"):
+                                # Check if this is the current banner
+                                is_current = selected_banner.get("is_current", False)
+
+                                # Remove the banner from the list
+                                removed_banner = banners.pop(selected_banner_idx)
+
+                                # If this was the current banner, set the first banner as current
+                                if is_current and banners:
+                                    banners[0]["is_current"] = True
+
+                                # Save the updated banners list
+                                with open(os.path.join("data", "banners.json"), "w") as f:
+                                    json.dump(banners, f, indent=4)
+
+                                st.success(f"Banner '{removed_banner.get('description', '')}' deleted!")
+                                st.rerun()
+
+                    # Logout button
+                    if st.button("Logout"):
+                        st.session_state.admin_authenticated = False
+                        st.rerun()
+
     # ──────────────────────────────────────────
     # Footer
     # ──────────────────────────────────────────
@@ -760,7 +1137,7 @@ try:
                 text-align: center;
                 font-size: 1.0rem;
                 padding: 0.5rem 0;
-                background: rgba(220, 220, 220, 0.85);
+                background: rgba(220, 220, 220, 0.75);
             }
         </style>
 
@@ -778,7 +1155,7 @@ try:
     # st.text(result.stdout.decode('utf-8'))
 
     if _debug:
-        with col_center:
+        with center_col_center:
             st.write("App started ✅")
 
 except Exception as e:

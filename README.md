@@ -120,6 +120,29 @@ If you'd like to run the app locally:
 
 ---
 
+## Banner Management System
+
+Prompt Forge includes a banner management system that allows you to:
+
+1. **Browse Banner History**: The app displays a banner image in the top-left corner. If multiple banners are available, navigation controls (◀ and ▶) will appear, allowing you to browse through the banner history.
+
+2. **Admin Panel**: Access the admin panel through the "Admin" tab. This requires authentication with an admin password.
+
+3. **Adding New Banners**: Once authenticated, you can:
+   - Upload new banner images (PNG, JPG, JPEG)
+   - Add a description for each banner
+   - Set a banner as the current one to be displayed
+
+4. **Managing Existing Banners**: The admin panel also allows you to:
+   - View all existing banners in a table
+   - Select a banner to manage
+   - Set a different banner as the current one
+   - Delete banners (except the last one)
+
+The banner system is designed so that only administrators can add or modify banners, while all users can browse through the banner history.
+
+---
+
 ## Feedback and Contribution
 
 Feel free to contribute improvements or report issues on the project’s GitHub repository. Your feedback helps enhance the app’s usability and functionality.
